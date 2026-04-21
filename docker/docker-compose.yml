@@ -1,0 +1,36 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: apiwatch-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: apiwatch
+      POSTGRES_USER: apiwatch
+      POSTGRES_PASSWORD: apiwatch123
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U apiwatch -d apiwatch"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # pgAdmin opcional — interface web para visualizar o banco
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: apiwatch-pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@apiwatch.local
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+
+volumes:
+  pgdata:

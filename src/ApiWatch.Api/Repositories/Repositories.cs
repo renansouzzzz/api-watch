@@ -13,6 +13,9 @@ public class EndpointRepository : IEndpointRepository
     public async Task<IEnumerable<MonitoredEndpoint>> GetAllActiveAsync(CancellationToken ct = default)
         => await _db.MonitoredEndpoints.Where(e => e.IsActive).ToListAsync(ct);
 
+    public async Task<IEnumerable<MonitoredEndpoint>> GetByUserIdAsync(Guid userId, CancellationToken ct = default)
+        => await _db.MonitoredEndpoints.Where(e => e.IsActive && e.UserId == userId).ToListAsync(ct);
+
     public async Task<MonitoredEndpoint?> GetByIdAsync(Guid id, CancellationToken ct = default)
         => await _db.MonitoredEndpoints.FindAsync([id], ct);
 

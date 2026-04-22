@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using ApiWatch.Api.DTOs;
 using ApiWatch.Core.Interfaces;
 
@@ -8,29 +9,26 @@ public static class DashboardRoutes
     public static void MapDashboardRoutes(this WebApplication app)
     {
         app.MapGet("/api/dashboard/summary", async (
+            ClaimsPrincipal user,
             IEndpointRepository endpointRepo,
-            ICheckResultRepository checkRepo) =>
+            ICheckResultRepository checkRepo,
+            CancellationToken ct) =>
         {
-            var endpoints = await endpointRepo.GetAllActiveAsync();
+            var userId = Guid.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var endpoints = await endpointRepo.GetByUserIdAsync(userId, ct);
             var endpointList = endpoints.ToList();
 
-            // Sequential processing — EF Core DbContext does not support
-            // concurrent operations on the same instance (no Task.WhenAll here)
             var statuses = new List<EndpointStatusResponse>();
             foreach (var ep in endpointList)
             {
-                var last      = await checkRepo.GetLastByEndpointAsync(ep.Id);
-                var uptime24h = await checkRepo.GetUptimePercentageAsync(ep.Id, TimeSpan.FromHours(24));
+                var last      = await checkRepo.GetLastByEndpointAsync(ep.Id, ct);
+                var uptime24h = await checkRepo.GetUptimePercentageAsync(ep.Id, TimeSpan.FromHours(24), ct);
 
                 statuses.Add(new EndpointStatusResponse(
-                    ep.Id,
-                    ep.Name,
-                    ep.Url,
-                    last?.IsUp,
-                    last?.StatusCode,
+                    ep.Id, ep.Name, ep.Url,
+                    last?.IsUp, last?.StatusCode,
                     last?.LatencyMs ?? 0,
-                    uptime24h,
-                    last?.CheckedAt
+                    uptime24h, last?.CheckedAt
                 ));
             }
 
@@ -47,6 +45,6 @@ public static class DashboardRoutes
             );
 
             return Results.Ok(summary);
-        }).WithTags("Dashboard");
+        }).WithTags("Dashboard").RequireAuthorization().RequireRateLimiting("api");
     }
 }

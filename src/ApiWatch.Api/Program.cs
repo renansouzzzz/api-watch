@@ -46,7 +46,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddRepositories();
-builder.Services.AddScoped<AuthService>();
+builder.Services.AddAppServices();
 
 // JWT authentication — tells ASP.NET how to validate incoming tokens
 var jwtKey = builder.Configuration["Jwt:Key"]!;
@@ -97,6 +97,7 @@ app.UseAuthorization();
 
 // === Routes ===
 app.MapAuthRoutes();
+app.MapBillingRoutes();
 app.MapEndpointRoutes();
 app.MapCheckResultRoutes();
 app.MapDashboardRoutes();

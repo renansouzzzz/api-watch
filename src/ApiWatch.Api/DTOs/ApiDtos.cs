@@ -27,6 +27,35 @@ public record EndpointResponse(
     DateTime CreatedAt
 );
 
+// ===== Billing DTOs =====
+
+public record PlanResponse(
+    int Id,
+    string Name,
+    decimal PriceMonthly,
+    int MaxEndpoints,
+    int MinIntervalSeconds,
+    int HistoryDays,
+    bool HasEmailAlerts,
+    bool HasWebhooks,
+    bool HasStatusPage,
+    int MaxTeamMembers
+);
+
+public record SubscriptionResponse(
+    Guid Id,
+    string Status,
+    string PlanName,
+    int PlanId,
+    decimal PriceMonthly,
+    int MaxEndpoints,
+    int MinIntervalSeconds,
+    DateTime StartedAt,
+    DateTime? CurrentPeriodEnd
+);
+
+public record SubscribeRequest(int PlanId);
+
 // ===== CheckResult DTOs =====
 
 public record CheckResultResponse(

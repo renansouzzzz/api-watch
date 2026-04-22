@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Text;
 using ApiWatch.Core.Data;
 using ApiWatch.Core.Entities;
+using ApiWatch.Core.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
@@ -16,11 +17,13 @@ public class AuthService
 {
     private readonly AppDbContext _db;
     private readonly IConfiguration _config;
+    private readonly ISubscriptionRepository _subscriptions;
 
-    public AuthService(AppDbContext db, IConfiguration config)
+    public AuthService(AppDbContext db, IConfiguration config, ISubscriptionRepository subscriptions)
     {
         _db = db;
         _config = config;
+        _subscriptions = subscriptions;
     }
 
     public async Task<AuthResponse?> RegisterAsync(RegisterRequest req, CancellationToken ct = default)
@@ -40,6 +43,15 @@ public class AuthService
 
         _db.Users.Add(user);
         await _db.SaveChangesAsync(ct);
+
+        await _subscriptions.CreateAsync(new Subscription
+        {
+            UserId = user.Id,
+            PlanId = 1,
+            Status = "active",
+            StartedAt = DateTime.UtcNow,
+            CurrentPeriodEnd = null
+        }, ct);
 
         await _db.Entry(user).Reference(u => u.Plan).LoadAsync(ct);
 

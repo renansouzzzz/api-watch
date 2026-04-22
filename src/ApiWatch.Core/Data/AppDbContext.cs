@@ -12,6 +12,7 @@ public class AppDbContext : DbContext
     public DbSet<Incident> Incidents => Set<Incident>();
     public DbSet<Plan> Plans => Set<Plan>();
     public DbSet<User> Users => Set<User>();
+    public DbSet<Subscription> Subscriptions => Set<Subscription>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -87,6 +88,23 @@ public class AppDbContext : DbContext
                 CreatedAt = DateTime.UtcNow
             }
         );
+
+        // Subscription configuration
+        modelBuilder.Entity<Subscription>(e =>
+        {
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Status).HasMaxLength(20).IsRequired();
+            e.Property(x => x.StripeSubscriptionId).HasMaxLength(100);
+            e.Property(x => x.StripeCustomerId).HasMaxLength(100);
+            e.HasOne(x => x.User)
+             .WithMany()
+             .HasForeignKey(x => x.UserId)
+             .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Plan)
+             .WithMany()
+             .HasForeignKey(x => x.PlanId);
+            e.HasIndex(x => new { x.UserId, x.Status });
+        });
 
         // Seed plans — IDs are fixed integers so they never change across migrations
         modelBuilder.Entity<Plan>().HasData(

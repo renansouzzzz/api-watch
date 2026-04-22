@@ -1,6 +1,9 @@
+using System.Security.Claims;
 using ApiWatch.Api.DTOs;
+using ApiWatch.Core.Data;
 using ApiWatch.Core.Entities;
 using ApiWatch.Core.Interfaces;
+using Microsoft.EntityFrameworkCore;
 
 namespace ApiWatch.Api.Endpoints;
 
@@ -31,10 +34,43 @@ public static class EndpointRoutes
             ));
         });
 
-        group.MapPost("/", async (CreateEndpointRequest req, IEndpointRepository repo) =>
+        group.MapPost("/", async (CreateEndpointRequest req, ClaimsPrincipal user, AppDbContext db, IEndpointRepository repo, CancellationToken ct) =>
         {
+            Guid? userId = null;
+
+            if (user.Identity?.IsAuthenticated == true)
+            {
+                userId = Guid.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+                var sub = await db.Subscriptions
+                    .Include(s => s.Plan)
+                    .FirstOrDefaultAsync(s => s.UserId == userId && s.Status == "active", ct);
+
+                if (sub is not null)
+                {
+                    if (sub.Plan.MaxEndpoints != -1)
+                    {
+                        var count = await db.MonitoredEndpoints.CountAsync(e => e.UserId == userId, ct);
+                        if (count >= sub.Plan.MaxEndpoints)
+                            return Results.Problem(
+                                title: "Plan limit reached",
+                                detail: $"Your {sub.Plan.Name} plan allows up to {sub.Plan.MaxEndpoints} endpoints. Upgrade to add more.",
+                                statusCode: 403
+                            );
+                    }
+
+                    if (req.IntervalSeconds < sub.Plan.MinIntervalSeconds)
+                        return Results.Problem(
+                            title: "Interval too short",
+                            detail: $"Your {sub.Plan.Name} plan requires a minimum check interval of {sub.Plan.MinIntervalSeconds}s.",
+                            statusCode: 403
+                        );
+                }
+            }
+
             var endpoint = new MonitoredEndpoint
             {
+                UserId = userId,
                 Name = req.Name,
                 Url = req.Url,
                 IntervalSeconds = req.IntervalSeconds,
@@ -42,13 +78,11 @@ public static class EndpointRoutes
             };
 
             var created = await repo.CreateAsync(endpoint);
-            var response = new EndpointResponse(
+            return Results.Created($"/api/endpoints/{created.Id}", new EndpointResponse(
                 created.Id, created.Name, created.Url,
                 created.IntervalSeconds, created.TimeoutSeconds,
                 created.IsActive, created.CreatedAt
-            );
-
-            return Results.Created($"/api/endpoints/{created.Id}", response);
+            ));
         });
 
         group.MapPut("/{id:guid}", async (Guid id, UpdateEndpointRequest req, IEndpointRepository repo) =>

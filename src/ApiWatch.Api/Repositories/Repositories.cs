@@ -41,6 +41,31 @@ public class EndpointRepository : IEndpointRepository
     }
 }
 
+public class SubscriptionRepository : ISubscriptionRepository
+{
+    private readonly AppDbContext _db;
+    public SubscriptionRepository(AppDbContext db) => _db = db;
+
+    public async Task<Subscription?> GetActiveByUserIdAsync(Guid userId, CancellationToken ct = default)
+        => await _db.Subscriptions
+            .Include(s => s.Plan)
+            .FirstOrDefaultAsync(s => s.UserId == userId && s.Status == "active", ct);
+
+    public async Task<Subscription> CreateAsync(Subscription subscription, CancellationToken ct = default)
+    {
+        _db.Subscriptions.Add(subscription);
+        await _db.SaveChangesAsync(ct);
+        return subscription;
+    }
+
+    public async Task<Subscription> UpdateAsync(Subscription subscription, CancellationToken ct = default)
+    {
+        _db.Subscriptions.Update(subscription);
+        await _db.SaveChangesAsync(ct);
+        return subscription;
+    }
+}
+
 public class CheckResultRepository : ICheckResultRepository
 {
     private readonly AppDbContext _db;

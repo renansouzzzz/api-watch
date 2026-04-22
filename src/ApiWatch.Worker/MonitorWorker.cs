@@ -1,5 +1,6 @@
 using ApiWatch.Core.Entities;
 using ApiWatch.Core.Interfaces;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 
 namespace ApiWatch.Worker;
@@ -11,7 +12,7 @@ public class MonitorWorker : BackgroundService
     private readonly ILogger<MonitorWorker> _logger;
 
     // Tracks when each endpoint was last checked
-    private readonly Dictionary<Guid, DateTime> _lastChecked = new();
+    private readonly ConcurrentDictionary<Guid, DateTime> _lastChecked = new();
 
     public MonitorWorker(
         IServiceScopeFactory scopeFactory,
@@ -45,16 +46,17 @@ public class MonitorWorker : BackgroundService
 
     private async Task RunCheckCycleAsync(CancellationToken ct)
     {
-        using var scope = _scopeFactory.CreateScope();
-        var endpointRepo = scope.ServiceProvider.GetRequiredService<IEndpointRepository>();
-        var checkRepo = scope.ServiceProvider.GetRequiredService<ICheckResultRepository>();
+        IEnumerable<MonitoredEndpoint> endpoints;
+        using (var scope = _scopeFactory.CreateScope())
+        {
+            var endpointRepo = scope.ServiceProvider.GetRequiredService<IEndpointRepository>();
+            endpoints = await endpointRepo.GetAllActiveAsync(ct);
+        }
 
-        var endpoints = await endpointRepo.GetAllActiveAsync(ct);
         var now = DateTime.UtcNow;
-
         var tasks = endpoints
             .Where(ep => ShouldCheck(ep, now))
-            .Select(ep => CheckEndpointAsync(ep, checkRepo, ct));
+            .Select(ep => CheckEndpointAsync(ep, ct));
 
         await Task.WhenAll(tasks);
     }
@@ -69,7 +71,6 @@ public class MonitorWorker : BackgroundService
 
     private async Task CheckEndpointAsync(
         MonitoredEndpoint endpoint,
-        ICheckResultRepository checkRepo,
         CancellationToken ct)
     {
         var client = _httpClientFactory.CreateClient("monitor");
@@ -126,7 +127,12 @@ public class MonitorWorker : BackgroundService
             _logger.LogWarning("[{Name}] FALHA: {Error}", endpoint.Name, ex.Message);
         }
 
-        await checkRepo.SaveAsync(result, ct);
+        using (var scope = _scopeFactory.CreateScope())
+        {
+            var checkRepo = scope.ServiceProvider.GetRequiredService<ICheckResultRepository>();
+            await checkRepo.SaveAsync(result, ct);
+        }
+
         _lastChecked[endpoint.Id] = DateTime.UtcNow;
     }
 }
